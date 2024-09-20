@@ -1,26 +1,59 @@
-import Ajv2020 from 'ajv/dist/2020';
-import addFormats from 'ajv-formats';
-import lottieSchema from '../refs/lottie-meta-schema.json';
+/* exported render */
+import { LOTTIE_JSON_MANDATORY_FIELDS, ZIP_SIGNATURE } from '../constants/constants';
 
-const ajv = new Ajv2020({
-    strict: false,
-    allErrors: true,
-    validateFormats: true,
-});
-addFormats(ajv);
+export function isDotLottie(fileData: ArrayBuffer): boolean {
+  if (fileData.byteLength < 4) {
+    return false;
+  }
 
-// Load the Lottie schema
-const validate = ajv.compile(lottieSchema);
+  const fileSignature = new Uint8Array(fileData.slice(0, ZIP_SIGNATURE.byteLength));
 
-export function validateLottieJson(jsonData: unknown): { isValid: boolean; error?: string } {
-    const isValid = validate(jsonData);
+  for (let i = 0; i < ZIP_SIGNATURE.length; i += 1) {
+    if (ZIP_SIGNATURE[i] !== fileSignature[i]) {
+      return false;
+    }
+  }
 
-    if (isValid) {
-        return { isValid: true };
+  return true;
+}
+
+/**
+ * Returns whether the given object looks like a valid Lottie JSON structure.
+ */
+export function isLottieJSON(json: Record<string, unknown>): boolean {
+  return LOTTIE_JSON_MANDATORY_FIELDS.every((field) => Object.prototype.hasOwnProperty.call(json, field));
+}
+
+export function isLottie(fileData: string | Record<string, unknown>): boolean {
+  if (typeof fileData === 'string') {
+    try {
+        return isLottieJSON(JSON.parse(fileData));
+    } catch (e) {
+        console.error(e);
+        return false;
+    }
+  } else {
+    return isLottieJSON(fileData);
+  }
+}
+
+export function validateFile(fileData: string | Record<string, unknown> | ArrayBuffer): boolean {
+    if (fileData instanceof ArrayBuffer) {
+        try {
+            return isDotLottie(fileData);
+        } catch (e) {
+            console.error(e);
+            return false;
+        }
+    } else if (typeof fileData === 'string' || typeof fileData === 'object') {
+        try {
+            return isLottie(fileData);
+        } catch (e) {
+            console.error(e);
+            return false;
+        }
     } else {
-        return { 
-        isValid: false, 
-        error: ajv.errorsText(validate.errors)
-        };
+        console.error('Invalid input type');
+        return false;
     }
 }
