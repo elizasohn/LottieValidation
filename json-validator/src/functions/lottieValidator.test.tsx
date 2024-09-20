@@ -1,96 +1,134 @@
-import { describe, it, expect } from 'vitest';
-import { validateLottieJson } from './lottieValidator'; // Adjust the import path as necessary
+
+import { describe, it, expect, vi } from 'vitest';
+import { isDotLottie, isLottieJSON, isLottie, validateFile } from './lottieValidator';
+import { LOTTIE_JSON_MANDATORY_FIELDS, ZIP_SIGNATURE } from '../constants/constants';
 import exampleLottieJson from '../data/exampleLottie.json';
 
-describe('validateLottieJson', () => {
-  it('should validate a correct minimal Lottie JSON', () => {
-    const validLottieJson = {
-      v: "5.5.2",
-      fr: 30,
-      ip: 0,
-      op: 60,
-      w: 512,
-      h: 512,
-      nm: "Test Animation",
-      ddd: 0,
-      assets: [],
-      layers: []
-    };
-    const result = validateLottieJson(validLottieJson);
-    expect(result.isValid).toBe(true);
-    expect(result.error).toBeUndefined();
-  });
+describe('Lottie validator functions', () => {
+    describe('isDotLottie', () => {
+        it('should return true for valid .lottie file data', () => {
+            const validData = new ArrayBuffer(ZIP_SIGNATURE.length);
+            const view = new Uint8Array(validData);
+            ZIP_SIGNATURE.forEach((byte, index) => {
+                view[index] = byte;
+            });
+            expect(isDotLottie(validData)).toBe(true);
+        });
 
-  it('should invalidate an incorrect Lottie JSON missing required properties', () => {
-    const invalidLottieJson = {
-      v: "5.5.2",
-      fr: 30,
-      ip: 0,
-      op: 60,
-      // missing w and h
-      nm: "Test Animation",
-      ddd: 0,
-      assets: [],
-      layers: []
-    };
-    const result = validateLottieJson(invalidLottieJson);
-    expect(result.isValid).toBe(false);
-    expect(result.error).toContain("must have required property 'w'");
-    expect(result.error).toContain("must have required property 'h'");
-  });
+        it('should return false for invalid .lottie file data', () => {
+            const invalidData = new ArrayBuffer(4);
+            expect(isDotLottie(invalidData)).toBe(false);
+        });
 
-  it('should invalidate a Lottie JSON with incorrect property types', () => {
-    const invalidLottieJson = {
-      v: "5.5.2",
-      fr: "30", // should be number
-      ip: 0,
-      op: 60,
-      w: 512,
-      h: 512,
-      nm: "Test Animation",
-      ddd: 0,
-      assets: [],
-      layers: []
-    };
-    const result = validateLottieJson(invalidLottieJson);
-    expect(result.isValid).toBe(false);
-    expect(result.error).toContain("must be number");
-  });
+        it('should return false for data shorter than 4 bytes', () => {
+            const shortData = new ArrayBuffer(3);
+            expect(isDotLottie(shortData)).toBe(false);
+        });
+    });
 
-  it('should validate a Lottie JSON with additional properties', () => {
-    const validLottieJson = {
-      v: "5.5.2",
-      fr: 30,
-      ip: 0,
-      op: 60,
-      w: 512,
-      h: 512,
-      nm: "Test Animation",
-      ddd: 0,
-      assets: [],
-      layers: [],
-      extraProp: "This is allowed"
-    };
-    const result = validateLottieJson(validLottieJson);
-    expect(result.isValid).toBe(true);
-    expect(result.error).toBeUndefined();
-  });
+    describe('isLottieJSON', () => {
+        it('should return true for valid Lottie JSON', () => {
+            const validJSON = LOTTIE_JSON_MANDATORY_FIELDS.reduce((obj, field) => {
+                obj[field] = 'mock field data';
+                return obj;
+            }, {} as Record<string, unknown>);
+            expect(isLottieJSON(validJSON)).toBe(true);
+        });
 
-  it('should invalidate a non-object input', () => {
-    const invalidInput = "not an object";
-    const result = validateLottieJson(invalidInput);
-    expect(result.isValid).toBe(false);
-    expect(result.error).toContain("must be object");
-  });
+        it('should return false for invalid Lottie JSON', () => {
+            const invalidJSON = { someField: 'value' };
+            expect(isLottieJSON(invalidJSON)).toBe(false);
+        });
+    });
 
-  it('should validate a complex Lottie JSON with nested properties', () => {
-    const complexLottieJson = exampleLottieJson;
-    const result = validateLottieJson(complexLottieJson);
-    console.log('Validation Result:', result);
-    if (!result.isValid) {
-      console.log('Validation Errors:', JSON.stringify(result.error, null, 2));
-    }
-    expect(result.isValid).toBe(true);
-    expect(result.error).toBeUndefined();
-  });
+    describe('isLottie', () => {
+        it('should return true for valid Lottie JSON string', () => {
+            const validJSON = JSON.stringify(LOTTIE_JSON_MANDATORY_FIELDS.reduce((obj, field) => {
+                obj[field] = 'mock field data';
+                return obj;
+            }, {} as Record<string, unknown>));
+            expect(isLottie(validJSON)).toBe(true);
+        });
+
+        it('should return false for invalid Lottie JSON string', () => {
+            const invalidJSON = JSON.stringify({ someField: 'value' });
+            expect(isLottie(invalidJSON)).toBe(false);
+        });
+
+        it('should return true for valid Lottie JSON object', () => {
+            const validJSON = LOTTIE_JSON_MANDATORY_FIELDS.reduce((obj, field) => {
+                obj[field] = 'mock field data';
+                return obj;
+            }, {} as Record<string, unknown>);
+            expect(isLottie(validJSON)).toBe(true);
+        });
+
+        it('should return false for invalid Lottie JSON object', () => {
+            const invalidJSON = { someField: 'value' };
+            expect(isLottie(invalidJSON)).toBe(false);
+        });
+
+        it('should return false and log error for invalid JSON string', () => {
+            const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+            expect(isLottie('invalid json')).toBe(false);
+            expect(consoleSpy).toHaveBeenCalled();
+            consoleSpy.mockRestore();
+        });
+    });
+
+    describe('validateFile', () => {
+        it('should return true for valid .lottie file data', () => {
+            const validData = new ArrayBuffer(ZIP_SIGNATURE.length);
+            const view = new Uint8Array(validData);
+            ZIP_SIGNATURE.forEach((byte, index) => {
+                view[index] = byte;
+            });
+            expect(validateFile(validData)).toBe(true);
+        });
+
+        it('should return false for invalid .lottie file data', () => {
+            const invalidData = new ArrayBuffer(4);
+            expect(validateFile(invalidData)).toBe(false);
+        });
+
+        it('should return true for valid Lottie JSON string', () => {
+            const validJSON = JSON.stringify(LOTTIE_JSON_MANDATORY_FIELDS.reduce((obj, field) => {
+                obj[field] = 'mock field data';
+                return obj;
+            }, {} as Record<string, unknown>));
+            expect(validateFile(validJSON)).toBe(true);
+        });
+
+        it('should return false for invalid Lottie JSON string', () => {
+            const invalidJSON = JSON.stringify({ someField: 'value' });
+            expect(validateFile(invalidJSON)).toBe(false);
+        });
+
+        it('should return true for valid Lottie JSON object', () => {
+            const validJSON = LOTTIE_JSON_MANDATORY_FIELDS.reduce((obj, field) => {
+                obj[field] = 'mock field data';
+                return obj;
+            }, {} as Record<string, unknown>);
+            expect(validateFile(validJSON)).toBe(true);
+        });
+
+        it('should return false for invalid Lottie JSON object', () => {
+            const invalidJSON = { someField: 'value' };
+            expect(validateFile(invalidJSON)).toBe(false);
+        });
+
+        it('should return false and log error for unexpected input type', () => {
+            const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            expect(validateFile(123 as any)).toBe(false);
+            expect(consoleSpy).toHaveBeenCalled();
+            consoleSpy.mockRestore();
+        });
+    });
+    describe('validateExampleLottieJson', () => {
+        it('should return true for valid .json example file data', () => {
+            const validData = exampleLottieJson;
+            expect(validateFile(validData)).toBe(true);
+        });
+    });
 });
